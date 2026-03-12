@@ -1,14 +1,48 @@
 import React, { useContext, useEffect, useState } from 'react'
 import { AppContext } from '../../context/AppContext'
 import Loading from '../../components/student/Loading'
+import axios from 'axios'
+import { toast } from 'react-toastify'
 
 const MyCourses = () => {
 
-  const {currency, allCourses} = useContext(AppContext)
+  const { currency, backendUrl, getToken } = useContext(AppContext)
   const [courses, setCourses] = useState(null)
+
   const fetchEducatorCourse = async () => {
-    setCourses(allCourses)
+    try {
+      const token = await getToken()
+      const { data } = await axios.get(backendUrl + '/api/educator/courses', {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if(data.success){
+        setCourses(data.courses)
+      } else {
+        toast.error(data.message)
+      }
+    } catch (error) {
+      toast.error(error.message)
+    }
   }
+
+  const handleDelete = async (courseId, courseTitle) => {
+    if (!window.confirm(`Are you sure you want to delete "${courseTitle}"? This cannot be undone.`)) return
+    try {
+      const token = await getToken()
+      const { data } = await axios.delete(backendUrl + `/api/educator/delete-course/${courseId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if(data.success){
+        toast.success(data.message)
+        setCourses(prev => prev.filter(c => c._id !== courseId))
+      } else {
+        toast.error(data.message)
+      }
+    } catch (error) {
+      toast.error(error.message)
+    }
+  }
+
   useEffect(()=> {
     fetchEducatorCourse()
   }, [])
@@ -26,19 +60,25 @@ const MyCourses = () => {
             <th className='px-4 py-3 font-semibold truncate'>Earnings</th>
             <th className='px-4 py-3 font-semibold truncate'>Students</th>
             <th className='px-4 py-3 font-semibold truncate'>Published On</th>
+            <th className='px-4 py-3 font-semibold truncate'>Actions</th>
           </tr>
           </thead>
-          <tbody className='tet-sm text-gray-500'>
+          <tbody className='text-sm text-gray-500'>
             {courses.map((course) => (
-              <tr key={course._id } className='border-b border-gray-500/20'>
+              <tr key={course._id} className='border-b border-gray-500/20'>
                 <td className='md:px-4 pl-2 md:pl-4 py-3 flex items-center space-x-3 truncate'>
-                  <img src={course.courseThumbnail} alt="Course Image" className='w-16' />
+                  <img src={course.courseThumbnail} alt="Course Image" className='w-16 rounded' />
                   <span className='truncate hidden md:block'>{course.courseTitle}</span>
                 </td>
-                <td className='px-4 py-3'>{currency} {Math.floor(course.enrolledStudents.length * (course.coursePrice - course.discount * course.coursePrice / 100 ))}</td>
+                <td className='px-4 py-3'>{currency}{Math.floor(course.enrolledStudents.length * (course.coursePrice - course.discount * course.coursePrice / 100))}</td>
                 <td className='px-4 py-3'>{course.enrolledStudents.length}</td>
+                <td className='px-4 py-3'>{new Date(course.createdAt).toLocaleDateString()}</td>
                 <td className='px-4 py-3'>
-                  {new Date(course.createdAt).toLocaleDateString()}
+                  <button
+                    onClick={() => handleDelete(course._id, course.courseTitle)}
+                    className='text-red-500 hover:text-red-700 hover:underline text-sm font-medium transition-colors'>
+                    Delete
+                  </button>
                 </td>
               </tr>
             ))}
@@ -46,7 +86,6 @@ const MyCourses = () => {
         </table>
       </div>
       </div>
-      
     </div>
   ) : <Loading />
 }

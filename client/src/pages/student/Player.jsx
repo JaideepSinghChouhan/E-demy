@@ -6,36 +6,110 @@ import humanizeDuration from 'humanize-duration'
 import YouTube from 'react-youtube'
 import Footer from '../../components/student/Footer'
 import Rating from '../../components/student/Rating'
+import axios from 'axios'
+import { toast } from 'react-toastify'
 
 
 const Player = () => {
 
-  const {enrolledCourses, calculateChapterTime} = useContext(AppContext)
+  const {enrolledCourses, calculateChapterTime, backendUrl, getToken, fetchUserEnrolledCourses} = useContext(AppContext)
   const {courseId} = useParams()
   const [courseData, setCourseData] = useState(null)
   const [openSections, setOpenSections] = useState({})
   const [playerData, setPlayerData] = useState(null)
+  const [progressData, setProgressData] = useState(null)
+  const [initialRating, setInitialRating] = useState(0)
 
-  const getCourseData = ()=>{
-    enrolledCourses.map((course)=>{
+  const getCourseData = () => {
+    enrolledCourses.map((course) => {
       if(course._id === courseId){
          setCourseData(course)
       }
     })
   }
 
-const toggleSection = (index)=>{
-  setOpenSections((prev)=>(
-    {...prev,
-      [index]: !prev[index],
+  const toggleSection = (index) => {
+    setOpenSections((prev) => (
+      {...prev,
+        [index]: !prev[index],
+      }
+    ));
+  };
+
+  const getProgress = async () => {
+    try {
+      const token = await getToken()
+      const { data } = await axios.post(backendUrl + '/api/user/get-course-progress',
+        { courseId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      if (data.success && data.progressData) {
+        setProgressData(data.progressData.lectureCompleted)
+      } else {
+        setProgressData([])
+      }
+    } catch (error) {
+      toast.error(error.message)
     }
-  ));
-};
+  }
 
+  const markLectureComplete = async (lectureId) => {
+    try {
+      const token = await getToken()
+      const { data } = await axios.post(backendUrl + '/api/user/update-course-progress',
+        { courseId, lectureId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      if (data.success) {
+        toast.success(data.message)
+        getProgress()
+      } else {
+        toast.error(data.message)
+      }
+    } catch (error) {
+      toast.error(error.message)
+    }
+  }
 
-useEffect(()=>{
-  getCourseData()
-}, [enrolledCourses])
+  const handleRating = async (rating) => {
+    try {
+      const token = await getToken()
+      const { data } = await axios.post(backendUrl + '/api/user/add-rating',
+        { courseId, rating },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      if (data.success) {
+        toast.success(data.message)
+        fetchUserEnrolledCourses()
+      } else {
+        toast.error(data.message)
+      }
+    } catch (error) {
+      toast.error(error.message)
+    }
+  }
+
+  useEffect(() => {
+    getCourseData()
+  }, [enrolledCourses])
+
+  useEffect(() => {
+    if(courseData) {
+      getProgress()
+      // find user's existing rating
+      if (courseData.courseRatings) {
+        const userRating = courseData.courseRatings.find(r => r.userId)
+        if (userRating) setInitialRating(userRating.rating)
+      }
+    }
+  }, [courseData])
+
+  const isLectureCompleted = (lectureId) => progressData && progressData.includes(lectureId)
+
+  const totalLectures = courseData
+    ? courseData.courseContent.reduce((sum, ch) => sum + ch.chapterContent.length, 0)
+    : 0
+  const completedLectures = progressData ? progressData.length : 0
 
   return (
     <>
@@ -43,8 +117,11 @@ useEffect(()=>{
       {/*left column*/}
       <div className='text-gray=800'>
         <h2 className='text-xl font-semibold'>Course Structure</h2>
+        <div className='flex items-center gap-3 mt-2 mb-4 text-sm text-gray-600'>
+          <p>Completed: <span className='font-medium text-blue-600'>{completedLectures} / {totalLectures}</span> lectures</p>
+        </div>
 
-        <div className='pt-5'>
+        <div className='pt-2'>
                   {courseData && courseData.courseContent.map((chapter, index)=> (
                     <div key={index} className='border border-gray=300 bg-white mb-2 rounded'>
                       <div className='flex items-center justify-between px-4 py-3 cursor-pointer select-none ' onClick={()=> toggleSection(index)}>
@@ -58,7 +135,7 @@ useEffect(()=>{
                          <ul className='list-disc md:pl-10 pl-4 pr-4 py-2 text-gray-600 border-t border-gray-300'>
                           {chapter.chapterContent.map((lecture, i)=> (
                             <li key={i} className='flex items-start gap-2 py-1'>
-                              <img src={false ? assets.blue_tick_icon : assets.play_icon} alt="play icon" className='w-4 h-4 mt-1' />
+                              <img src={isLectureCompleted(lecture.lectureId) ? assets.blue_tick_icon : assets.play_icon} alt="play icon" className='w-4 h-4 mt-1' />
                               <div className='flex items-center justify-between w-full text-gray-800 text-xs md:text-default'>
                                 <p>{lecture.lectureTitle}</p>
                                 <div className='flex gap-2'>
@@ -70,7 +147,7 @@ useEffect(()=>{
                               </div>
                             </li>
                           ))}
-        
+      
                          </ul>
                           </div>
                         </div>
@@ -78,8 +155,7 @@ useEffect(()=>{
                 </div>
                 <div className='flex items-center gap-2 py-3 mt-10'>
                   <h1 className='text-xl font-bold'>Rate this course:</h1>
-                  <Rating initialRating={0}/>
-
+                  <Rating initialRating={initialRating} onRate={handleRating}/>
                 </div>
       </div>
 
@@ -90,9 +166,12 @@ useEffect(()=>{
              <YouTube videoId={playerData.lectureUrl.split('/').pop() } iframeClassName='w-full aspect-video'/>
              <div className='flex justify-between items-center mt-1'>
               <p>{playerData.chapter}.{playerData.lecture} {playerData.lectureTitle}
-
               </p>
-              <button className='text-blue-600'>{false ? 'Completed' : 'Marl Complete' }</button>
+              <button
+                onClick={() => markLectureComplete(playerData.lectureId)}
+                className='text-blue-600'>
+                {isLectureCompleted(playerData.lectureId) ? '✅ Completed' : 'Mark Complete'}
+              </button>
              </div>
           </div>
         )

@@ -48,7 +48,7 @@ const CoursesList = () => {
         <img src={assets.cross_icon} alt="" className='cursor-pointer' onClick={()=> navigate('/course-list')}/>
         </div>
     }
-    <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 my-16 gap-3 px-2 md:p-0'>
+    <div className='grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 my-16 gap-4 px-2 md:p-0'>
       {filteredCourse.map((course, index)=> <CourseCard key={index} course={course}/>)}
     </div>
     </div>

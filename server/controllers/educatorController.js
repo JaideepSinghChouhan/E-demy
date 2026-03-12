@@ -49,6 +49,7 @@ import { clerkClient } from '@clerk/express'
 import Course from '../models/Course.js'
 import { v2 as cloudinary } from 'cloudinary'
 import { Purchase } from '../models/Purchase.js'
+import User from '../models/User.js'
 
 
 //update role to educator
@@ -169,3 +170,20 @@ export const getEnrolledStudentsData = async (req,res)=> {
 
     }
 }
+
+// delete a course
+export const deleteCourse = async (req, res) => {
+    try {
+        const educatorId = req.auth.userId
+        const { id } = req.params
+        const course = await Course.findById(id)
+        if (!course) return res.json({ success: false, message: 'Course not found' })
+        if (course.educator !== educatorId) {
+            return res.json({ success: false, message: 'Unauthorized: you did not create this course' })
+        }
+        await Course.findByIdAndDelete(id)
+        res.json({ success: true, message: 'Course deleted successfully' })
+    } catch (error) {
+        res.json({ success: false, message: error.message })
+    }
+}
